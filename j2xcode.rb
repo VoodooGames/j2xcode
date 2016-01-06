@@ -19,8 +19,8 @@ require "pathname"
 require "set"
 require_relative "utils"
 
-if ARGV.size < 5
-	puts "Paramaters: 'j2objc_path' 'j2objc_options_file' 'project_file' 'project_target_name' 'java_src_root::package' ..."
+if ARGV.size < 6
+	puts "Paramaters: 'j2objc_path' 'j2objc_options_file' 'project_file' 'project_target_name' 'java_src_root' 'java_src_root::package' ..."
 	exit
 end
 
@@ -75,34 +75,31 @@ def list_files(obj)
 end
 
 def roll_back(dest_java_bkp, dest_java)
-	if Pathname.new(dest_java_bkp).exist?
-		file_count = Utils.count_files(dest_java_bkp)
-		puts "Rolling back #{file_count} files..."
-		%x(ruby sync_folder.rb '#{dest_java_bkp}' '#{dest_java}')
-		Utils.delete(dest_java_bkp)
-	else
-		Utils.delete(dest_java)
-	end
+  Utils.delete(dest_java)
 end
 
 j2objc_path = ARGV[0] + "/j2objc"
 j2objc_options = Pathname.new(ARGV[1]).file? ? File.read(ARGV[1]).strip : ""
 project_file = ARGV[2]
 target_name = ARGV[3]
+java_src_root = ARGV[4]
 
 java_src_folders = []
 
-i = 4
+i = 5
 while !(ARGV[i].nil?) do
-	java_src_folders << ARGV[i].split("::")
-	i += 1
+    java_src_folder = ARGV[i].split("::")
+    java_src_folder[0] = java_src_root + "/" + java_src_folder[0]
+    java_src_folders << java_src_folder
+    i += 1
 end
 
 dest = Pathname.new(project_file).dirname.to_s + "/Java"
-dest_java = dest + "/java"
+dest_java = dest
 dest_java_subs = []
 java_src_folders.each do |folder|
-	java_folder = dest_java + "/" +Pathname.new(folder[0]).basename.to_s
+	java_folder = dest_java + folder[0]
+  
 	index = 1
 	while dest_java_subs.any?{|s| s.to_s == java_folder.to_s} do
 		java_folder = Pathname.new(java_folder.dirname) + (java_folder.basename.to_s + "-" + index.to_s)
@@ -144,12 +141,6 @@ unless all_file_names.eql?(all_file_names.uniq)
 	puts dups.map{|f| Pathname.new(f).basename.to_s + "\t " + Pathname.new(f).dirname.to_s}.delete_if{|f| f.strip.empty?}
 	roll_back(dest_java_bkp, dest_java)
 	error_exit("")
-end
-
-if Pathname.new(dest_java).exist?
-	file_count = Utils.count_files(dest_java)
-	puts "Backing up #{file_count} files..."
-	%x(ruby sync_folder.rb '#{dest_java}' '#{dest_java_bkp}')
 end
 
 puts "Detecting updated files..."
